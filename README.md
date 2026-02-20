@@ -1,5 +1,15 @@
 ## DevMind
 
+DevMind is an AI assistant for developers. It ingests a GitHub repository so you can chat about the codebase, explain code snippets, and generate documentation using a RAG (Retrieval Augmented Generation) backend.
+
+### Overview
+
+- `client` – React + Vite frontend (auth, dashboard, chat, code explain, docs).
+- `gateway` – Node.js + Express API for auth and as a proxy to the AI service (MongoDB + JWT).
+- `ai_service` – FastAPI service that uses ChromaDB and an LLM (Groq or Ollama) to power RAG and code tools.
+
+## DevMind
+
 DevMind is a full‑stack AI assistant for developers. It lets you ingest a GitHub repository, ask questions about the codebase using RAG, explain arbitrary code snippets, and generate downloadable documentation in Markdown.
 
 ### Features
@@ -17,7 +27,7 @@ DevMind is a full‑stack AI assistant for developers. It lets you ingest a GitH
 - **`ai_service/`** – FastAPI backend with:
   - ChromaDB vector store (`CHROMA_PERSIST_DIR`)
   - RAG pipeline for `/api/ingest`, `/api/ask`, `/api/explain`, `/api/generate-docs`
-  - Support for Groq API or local Ollama models.
+  - Support for Groq API.
 
 ### Prerequisites
 
@@ -26,14 +36,13 @@ DevMind is a full‑stack AI assistant for developers. It lets you ingest a GitH
 - MongoDB running locally (or a URI you control)
 - One of:
   - **Groq API key** (recommended, no local model install)
-  - **Ollama** installed locally with the configured model pulled
 
 ### Environment setup
 
-1. From the `DevMind` root, copy the example env file:
+1. From the `DevMind` root, env file:
 
    ```bash
-   cp .env.example .env
+   .env
    ```
 
 2. Edit `.env` and fill in at least:
@@ -48,9 +57,6 @@ DevMind is a full‑stack AI assistant for developers. It lets you ingest a GitH
      - `CHROMA_PERSIST_DIR` – directory to store embeddings (default `./chroma_db`)
    - **Groq (cloud)**
      - `GROQ_API_KEY` – key from `https://console.groq.com`
-   - **Ollama (local, optional alternative)**
-     - `OLLAMA_URL` – e.g. `http://localhost:11434`
-     - `OLLAMA_MODEL` – e.g. `llama2`
 
 ### Install & run (development)
 
@@ -92,7 +98,7 @@ By default the client runs on Vite’s dev port (e.g. `http://localhost:5173`), 
 
 ### Notes
 
-- For best answers, ensure either **Groq** or **Ollama** is configured and reachable.
+- For best answers, ensure either **Groq** is configured and reachable.
 - ChromaDB files are persisted under `CHROMA_PERSIST_DIR`; you can delete this directory to fully reset embeddings.
 - This README focuses on local development; for production you’ll likely want separate env files, HTTPS, and hardened JWT and MongoDB settings.
 
@@ -116,78 +122,6 @@ DevMind provides:
 
 ---
 
-## Architecture (ASCII)
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              DevMind Architecture                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                               │
-│   ┌──────────────┐     ┌──────────────┐     ┌──────────────────────────────┐ │
-│   │   Frontend   │     │   FastAPI    │     │         AI Module             │ │
-│   │ (HTML/CSS/JS)│────▶│   Backend    │────▶│  repo_loader → chunker        │ │
-│   │              │     │   + JWT      │     │       → embeddings            │ │
-│   └──────────────┘     └──────┬───────┘     │       → rag (LangChain)       │ │
-│          │                    │             └───────────────┬───────────────┘ │
-│          │                    │                             │                 │
-│          │                    │             ┌───────────────▼───────────────┐ │
-│          │                    │             │      Chroma Vector DB         │ │
-│          │                    │             │   (persistent, Sentence TF)   │ │
-│          │                    │             └───────────────────────────────┘ │
-│          │                    │                             │                 │
-│          │                    │             ┌───────────────▼───────────────┐ │
-│          │                    │             │   OpenAI API (optional)       │ │
-│          │                    │             │   for LLM in RAG / explain    │ │
-│          │                    │             └───────────────────────────────┘ │
-│          │                    │                                                 │
-│          │                    ▼             ┌───────────────────────────────┐ │
-│          │             ┌─────────────┐     │  SQLite (users, JWT)          │ │
-│          └────────────▶│  Same host  │     └───────────────────────────────┘ │
-│                        │  or CORS    │                                       │
-│                        └─────────────┘                                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Data flow (ingest):**  
-GitHub URL → clone → load files → chunk (500 tokens) → embed (Sentence Transformers) → Chroma (persist).
-
-**Data flow (ask):**  
-Question → embed query → Chroma similarity search → top-k chunks → LangChain + LLM → answer + sources.
-
----
-
-## Folder Structure
-
-```
-DevMind/
-├── backend/
-│   ├── main.py           # FastAPI app, CORS, static frontend, routes
-│   ├── config.py         # Pydantic settings from env
-│   ├── database.py       # SQLAlchemy async + SQLite (users)
-│   ├── routes/
-│   │   ├── auth_routes.py   # POST /auth/register, /auth/login
-│   │   └── api_routes.py    # /ingest_repo, /ask, /explain_code, /generate_docs
-│   └── auth/
-│       ├── jwt.py           # create/decode token, password hash
-│       └── dependencies.py  # get_current_user (Bearer JWT)
-├── ai/
-│   ├── embeddings.py     # Sentence Transformers + Chroma client
-│   ├── chunker.py        # Token-aware code chunking (~500 tokens)
-│   ├── repo_loader.py    # Git clone + load .py/.js/.ts/.html/.css etc.
-│   └── rag.py            # Retrieve from Chroma + LangChain LLM (OpenAI or fallback)
-├── chroma_db/            # Persistent Chroma data (created at runtime)
-├── frontend/
-│   ├── index.html
-│   ├── style.css
-│   └── app.js
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-├── .env.example
-└── README.md
-```
-
----
 
 ## Setup Instructions
 
@@ -195,7 +129,6 @@ DevMind/
 
 - **Python 3.10+**
 - **Git** (for cloning repos during ingestion)
-- **Docker & Docker Compose** (optional, for containerized run)
 
 ### Local development
 
@@ -229,77 +162,9 @@ DevMind/
    - Browser: `http://localhost:8000` (serves frontend from `frontend/`).
    - API docs: `http://localhost:8000/docs`.
 
-### Docker
+## Why DevMind?
 
-```bash
-# Build and run
-docker-compose up -d --build
-
-# App: http://localhost:8000
-# Optional: pass OPENAI_API_KEY and SECRET_KEY via .env or shell
-```
-
----
-
-## API Documentation
-
-Base URL: `http://localhost:8000` (or your host).
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST   | `/auth/register` | No  | Register: `{ "email", "username", "password" }` → `{ "access_token", "token_type" }` |
-| POST   | `/auth/login`    | No  | Login: `{ "username", "password" }` → `{ "access_token", "token_type" }` |
-| POST   | `/ingest_repo`   | Bearer | Body: `{ "repo_url", "collection_name?" }` → chunks + files count |
-| POST   | `/ask`           | Bearer | Body: `{ "question", "collection_name", "top_k?" }` → answer + sources |
-| POST   | `/explain_code`  | Bearer | Body: `{ "code", "language?" }` → explanation |
-| POST   | `/generate_docs` | Bearer | Body: `{ "collection_name" }` → readme_content |
-| GET    | `/health`        | No  | Health check |
-| GET    | `/`              | No  | Serves frontend or JSON info |
-
-**Authentication:**  
-Send header: `Authorization: Bearer <access_token>` for protected routes.
-
----
-
-## Example Screenshots (Placeholders)
-
-| Screen | Description |
-|--------|-------------|
-| *[Screenshot: Login / Register form]* | Auth form: username, password, login/register. |
-| *[Screenshot: Ingest section]* | GitHub URL input and “Ingest repo” button with status. |
-| *[Screenshot: Ask section]* | Collection name + question input and RAG answer with source citations. |
-| *[Screenshot: Explain code]* | Textarea for code and “Explain” button with explanation result. |
-| *[Screenshot: Generate docs]* | Collection name and generated README preview. |
-
----
-
-## Resume Bullet Points
-
-- **Designed and implemented** an AI-powered developer assistant (DevMind) with **RAG** over codebases using **Chroma**, **Sentence Transformers**, and **LangChain**.
-- **Built** a **FastAPI** backend with **JWT authentication**, **async SQLite** (SQLAlchemy), and modular routes for ingestion, Q&A, code explanation, and doc generation.
-- **Implemented** repository ingestion pipeline: **Git** clone, multi-language source loading, **token-aware chunking** (~500 tokens), embedding, and persistent vector storage.
-- **Delivered** a simple **HTML/CSS/JS** frontend (no framework) for repo upload, chat-style Q&A, code explanation, and documentation display, served from the same API.
-- **Containerized** the application with **Docker** and **docker-compose**, including persistent volumes for Chroma and SQLite and environment-based configuration.
-
----
-
-## Environment Variables (Summary)
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `HOST` | Bind host | `0.0.0.0` |
-| `PORT` | Bind port | `8000` |
-| `SECRET_KEY` | JWT signing key | (see .env.example) |
-| `ALGORITHM` | JWT algorithm | `HS256` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token TTL | `60` |
-| `OPENAI_API_KEY` | OpenAI for LLM (RAG/explain/docs) | — |
-| `CHROMA_PERSIST_DIR` | Chroma persistence path | `./chroma_db` |
-| `CORS_ORIGINS` | Allowed origins (comma-separated) | (see .env.example) |
-| `EMBEDDING_MODEL` | Sentence Transformers model | `all-MiniLM-L6-v2` |
-| `DATA_DIR` | Directory for SQLite DB (e.g. in Docker) | Project root |
-
----
-
-## License
-
-MIT (or your choice). This is a portfolio/educational project.
+Modern developers struggle to understand large unfamiliar codebases.
+DevMind solves this by combining Retrieval Augmented Generation with
+repository ingestion, allowing engineers to query their own code using
+natural language, generate documentation automatically, and accelerate onboarding.
