@@ -1,0 +1,23 @@
+# Env
+.env
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Chroma
+chroma_db/
+
+# Build
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
